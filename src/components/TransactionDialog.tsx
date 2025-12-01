@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,43 +85,82 @@ export const TransactionDialog = ({
   const fetchCategories = async () => {
     try {
       const response = await api.get("/categories");
+      console.log("Categorias carregadas:", response.data);
       setCategories(response.data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching categories:", error);
+      toast({
+        title: "Erro ao carregar categorias",
+        description: error?.response?.data?.message || "Verifique sua conexão",
+        variant: "destructive",
+      });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validações
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      toast({
+        title: "Valor inválido",
+        description: "Por favor, insira um valor maior que zero",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.transaction_date) {
+      toast({
+        title: "Data inválida",
+        description: "Por favor, selecione uma data",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
       const transactionData = {
         type: formData.type,
         amount: parseFloat(formData.amount),
-        description: formData.description || null,
+        description: formData.description.trim() || null,
         category_id: formData.category_id || null,
         transaction_date: formData.transaction_date,
       };
 
+      console.log("Enviando transação:", transactionData);
+
       if (transaction) {
         await api.put(`/transactions/${transaction.id}`, transactionData);
-
         toast({
-          title: "Transação atualizada com sucesso",
+          title: "Sucesso!",
+          description: "Transação atualizada com sucesso",
         });
       } else {
-        await api.post("/transactions", transactionData);
-
+        const response = await api.post("/transactions", transactionData);
+        console.log("Resposta do servidor:", response.data);
         toast({
-          title: "Transação criada com sucesso",
+          title: "Sucesso!",
+          description: "Transação criada com sucesso",
         });
       }
 
+      onOpenChange(false);
       onSuccess();
-    } catch (error) {
+      
+    } catch (error: any) {
+      console.error("Error saving transaction:", error);
+      console.error("Error details:", error.response?.data);
+      
+      const errorMessage = error?.response?.data?.message 
+        || error?.response?.data?.error
+        || "Ocorreu um erro ao salvar a transação";
+      
       toast({
         title: "Erro ao salvar transação",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -130,23 +170,26 @@ export const TransactionDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {transaction ? "Editar Transação" : "Nova Transação"}
           </DialogTitle>
+          <DialogDescription>
+            Preencha os campos abaixo para {transaction ? "editar" : "criar"} uma transação
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
-            <Label htmlFor="type">Tipo</Label>
+            <Label htmlFor="type">Tipo *</Label>
             <Select
               value={formData.type}
               onValueChange={(value: "income" | "expense") =>
                 setFormData({ ...formData, type: value })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger id="type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -157,7 +200,7 @@ export const TransactionDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="amount">Valor</Label>
+            <Label htmlFor="amount">Valor *</Label>
             <Input
               id="amount"
               type="number"
@@ -176,28 +219,40 @@ export const TransactionDialog = ({
             <Label htmlFor="category">Categoria</Label>
             <Select
               value={formData.category_id}
-              onValueChange={(value) =>
-                setFormData({ ...formData, category_id: value })
-              }
+              onValueChange={(value) => {
+                console.log("Categoria selecionada:", value);
+                setFormData({ ...formData, category_id: value });
+              }}
             >
-              <SelectTrigger>
+              <SelectTrigger id="category" className="w-full">
                 <SelectValue placeholder="Selecione uma categoria" />
               </SelectTrigger>
-              <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    <span className="flex items-center gap-2">
-                      <span>{category.icon}</span>
-                      {category.name}
-                    </span>
-                  </SelectItem>
-                ))}
+              <SelectContent className="max-h-[300px]">
+                {categories.length === 0 ? (
+                  <div className="p-2 text-sm text-muted-foreground">
+                    Nenhuma categoria disponível
+                  </div>
+                ) : (
+                  categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{category.icon}</span>
+                        <span>{category.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
+            {categories.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {categories.length} categoria(s) disponível(is)
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="date">Data</Label>
+            <Label htmlFor="date">Data *</Label>
             <Input
               id="date"
               type="date"
@@ -213,19 +268,21 @@ export const TransactionDialog = ({
             <Label htmlFor="description">Descrição</Label>
             <Textarea
               id="description"
-              placeholder="Descrição da transação"
+              placeholder="Descrição da transação (opcional)"
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
+              rows={3}
             />
           </div>
 
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end pt-4">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={loading}
             >
               Cancelar
             </Button>
