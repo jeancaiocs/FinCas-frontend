@@ -87,11 +87,27 @@ export const TransactionDialog = ({
       setCategories(response.data || []);
     } catch (error) {
       console.error("Error fetching categories:", error);
+      toast({
+        title: "Erro ao carregar categorias",
+        description: "Não foi possível carregar as categorias disponíveis",
+        variant: "destructive",
+      });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validação básica
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      toast({
+        title: "Valor inválido",
+        description: "Por favor, insira um valor maior que zero",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -105,22 +121,26 @@ export const TransactionDialog = ({
 
       if (transaction) {
         await api.put(`/transactions/${transaction.id}`, transactionData);
-
         toast({
-          title: "Transação atualizada com sucesso",
+          title: "Sucesso!",
+          description: "Transação atualizada com sucesso",
         });
       } else {
         await api.post("/transactions", transactionData);
-
         toast({
-          title: "Transação criada com sucesso",
+          title: "Sucesso!",
+          description: "Transação criada com sucesso",
         });
       }
 
-      onSuccess();
-    } catch (error) {
+      onOpenChange(false); // Fecha o dialog
+      onSuccess(); // Atualiza a lista
+      
+    } catch (error: any) {
+      console.error("Error saving transaction:", error);
       toast({
         title: "Erro ao salvar transação",
+        description: error?.response?.data?.message || "Ocorreu um erro ao salvar a transação",
         variant: "destructive",
       });
     } finally {
@@ -130,7 +150,7 @@ export const TransactionDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
             {transaction ? "Editar Transação" : "Nova Transação"}
@@ -146,7 +166,7 @@ export const TransactionDialog = ({
                 setFormData({ ...formData, type: value })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger id="type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -180,18 +200,21 @@ export const TransactionDialog = ({
                 setFormData({ ...formData, category_id: value })
               }
             >
-              <SelectTrigger>
+              <SelectTrigger id="category">
                 <SelectValue placeholder="Selecione uma categoria" />
               </SelectTrigger>
-              <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    <span className="flex items-center gap-2">
-                      <span>{category.icon}</span>
-                      {category.name}
-                    </span>
+              <SelectContent position="popper" sideOffset={5}>
+                {categories.length === 0 ? (
+                  <SelectItem value="none" disabled>
+                    Nenhuma categoria disponível
                   </SelectItem>
-                ))}
+                ) : (
+                  categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.icon} {category.name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -213,19 +236,21 @@ export const TransactionDialog = ({
             <Label htmlFor="description">Descrição</Label>
             <Textarea
               id="description"
-              placeholder="Descrição da transação"
+              placeholder="Descrição da transação (opcional)"
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
+              rows={3}
             />
           </div>
 
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end pt-4">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={loading}
             >
               Cancelar
             </Button>
