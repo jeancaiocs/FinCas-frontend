@@ -97,6 +97,25 @@ export const TransactionDialog = ({
     }
   };
 
+  // NOVA FUNÇÃO: Lidar com mudança de categoria
+  const handleCategoryChange = (categoryId: string) => {
+    const selectedCategory = categories.find(c => c.id === categoryId);
+    
+    setFormData(prev => ({
+      ...prev,
+      category_id: categoryId,
+      // Auto-preenche a descrição com o nome da categoria se estiver vazia
+      description: prev.description.trim() === "" && selectedCategory 
+        ? selectedCategory.name 
+        : prev.description
+    }));
+  };
+
+  // Função para obter a categoria selecionada
+  const getSelectedCategory = () => {
+    return categories.find(c => c.id === formData.category_id);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -168,6 +187,8 @@ export const TransactionDialog = ({
     }
   };
 
+  const selectedCategory = getSelectedCategory();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
@@ -219,13 +240,17 @@ export const TransactionDialog = ({
             <Label htmlFor="category">Categoria</Label>
             <Select
               value={formData.category_id}
-              onValueChange={(value) => {
-                console.log("Categoria selecionada:", value);
-                setFormData({ ...formData, category_id: value });
-              }}
+              onValueChange={handleCategoryChange}
             >
               <SelectTrigger id="category" className="w-full">
-                <SelectValue placeholder="Selecione uma categoria" />
+                <SelectValue placeholder="Selecione uma categoria">
+                  {selectedCategory && (
+                    <div className="flex items-center gap-2">
+                      <span>{selectedCategory.icon}</span>
+                      <span>{selectedCategory.name}</span>
+                    </div>
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="max-h-[300px]">
                 {categories.length === 0 ? (
@@ -275,6 +300,11 @@ export const TransactionDialog = ({
               }
               rows={3}
             />
+            {selectedCategory && formData.description === selectedCategory.name && (
+              <p className="text-xs text-muted-foreground">
+                💡 Descrição preenchida automaticamente com a categoria
+              </p>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end pt-4">
